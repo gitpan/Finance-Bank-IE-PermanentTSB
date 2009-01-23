@@ -1,0 +1,9 @@
+Revision history for Perl extension Finance::Bank::IE::PermanentTSB.
+
+0.02  Wed Jan 21 15:19:23 GMT 2009
+    - check_balance implemented
+
+0.01  Thu Jan 15 14:58:59 2009
+	- original version; created by h2xs 1.23 with options
+		-AX Finance::Bank::IE::PermanentTSB
+
