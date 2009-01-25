@@ -6,9 +6,9 @@ WriteMakefile(
     NAME              => 'Finance::Bank::IE::PermanentTSB',
     VERSION_FROM      => 'lib/Finance/Bank/IE/PermanentTSB.pm', # finds $VERSION
     PREREQ_PM         => {
-        'WWW::Mechanize' => 0,
-        'HTML::TokeParser::Simple' => 0,
-        'Date::Calc' => 0,
+        'WWW::Mechanize' => 1.34,
+        'HTML::TokeParser' => 2.37,
+        'Date::Calc' => 5.4,
     }, 
     ABSTRACT_FROM  => 'lib/Finance/Bank/IE/PermanentTSB.pm',
     AUTHOR         => 'Angelo "pallotron" Failla <pallotron@freaknet.org>',

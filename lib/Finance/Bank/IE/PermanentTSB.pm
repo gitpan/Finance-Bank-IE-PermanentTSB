@@ -1,19 +1,61 @@
+=head1 NAME
+
+Finance::Bank::IE::PermanentTSB - Perl Interface to the PermanentTSB
+Open24 homebanking on L<http://www.open24.ie>
+
+=head1 DESCRIPTION
+
+This is a set of functions that can be used in your Perl code to perform
+some operations with a Permanent TSB homebanking account.
+
+Features:
+
+=over
+
+=item * B<account(s) balance>: retrieves the balance for all the accounts
+you have set up (current account, visa card, etc.) 
+
+=item * B<account(s) statement> (to be implemented): retrieves the
+statement for a particular account, in a range of date. 
+
+=item * B<mobile phone top-up> (to be implemented): top up your mobile
+phone! 
+
+=item * B<funds transfer> (to be implemented): transfer money between your
+accounts or third party accounts. 
+
+=back
+
+=head1 METHODS / FUNCTIONS
+
+Every function in this module requires, as the first argument, a reference 
+to an hash which contains the configuration:
+
+    my %config = (
+        "open24numba" => "your open24 number",
+        "password" => "your internet password",
+        "pan" => "your personal access number",
+        "debug" => 1,
+    );
+
+=cut
+
 package Finance::Bank::IE::PermanentTSB;
 
-our $VERSION = '0.02';
+our $VERSION = '0.03';
 
 use strict;
 use warnings;
 use Data::Dumper;
 use WWW::Mechanize;
 use HTML::TokeParser;
-use HTML::TableExtract;
 use Carp qw(croak carp);
 use Date::Calc qw(check_date);
 
 use base 'Exporter';
-our @EXPORT = qw(check_balance);
-our @EXPORT_OK = qw(mobile_topup);
+# export by default the check_balance function and the constants
+our @EXPORT = qw(check_balance ALL WITHDRAWAL DEPOSIT);
+our @EXPORT_OK = qw(mobile_topup account_statement);
 
 my %cached_cfg;
 my $agent;
@@ -21,7 +63,32 @@ my $lastop = 0;
 
 my $BASEURL = "https://www.open24.ie/";
 
+# constant to be used with the account_statement() function
+use constant {
+    ALL =>        0,
+    WITHDRAWAL => 1,
+    DEPOSIT =>    2,
+};
 
+=head2 C<$boolean = login($config_ref)> - B<private>
+
+=over
+
+B<This is private function used by other function within the module.
+You don't need to call it directly from you code!>
+
+This function performs the login. It takes just one required argument,
+which is an hash reference for the configuration.
+The function returns true (1) if success or false (0) for any other
+state.
+If debug => 1 then it will dump the html page on /var/tmp/.
+Please be aware that this has a security risk. The information will
+persist on your filesystem until you reboot your machine (and /var/tmp
+get clean at boot time).
+
+=back
+
+=cut
 sub login {
     my $self = shift;
     my $config_ref = shift;
@@ -59,7 +126,7 @@ sub login {
         # simple check to see if the login is live
         # this based on Waider Finance::Bank::IE::BankOfIreland.pm!
         if ( time - $lastop < 60 ) {
-            carp "Last operation 60seconds ago, reusing old session"
+            carp "Last operation 60 seconds ago, reusing old session"
                 if $config_ref->{debug};
             $lastop = time;
             return 1;
@@ -122,6 +189,37 @@ sub login {
    
 }
 
+=head2 C<set_pan_fields($config_ref)> - B<private>
+
+=over
+
+B<This is private function used by other function within the module.
+You don't need to call it directly from you code!>
+
+This is used for the second step of the login process.
+The web interface ask you to insert 3 of the 6 digits that form the PAN
+code.
+The PAN is a secret code that only the PermanentTSB customer knows.
+If your PAN code is 123234 and the web interface is asking for this:
+
+=over
+
+=item Digit no. 2:
+
+=item Digit no. 5:
+
+=item Digit no. 6:
+
+=back
+
+The function will fill out the form providing 2,3,4 respectively.
+
+This function doesn't return anything.
+
+=back
+
+=cut
+
 sub set_pan_fields {
 
     my $agent = shift;
@@ -152,6 +250,55 @@ sub set_pan_fields {
     $agent->field('txtDigitC', $pan_digits[2]);
     $agent->field('__EVENTTARGET', 'btnContinue');
 }
+
+=head2 C<@accounts_balance = check_balance($config_ref)> - B<public>
+
+=over
+
+This function require the configuration hash reference as argument.
+It retruns an array of hashes, one hash for each account. 
+Each hash has these keys:
+
+=over
+
+=item * 'accname': account name, i.e. "Switch Current A/C".
+    
+=item * 'accno': account number. An integer representing the last 4 digits of the
+account.
+
+=item * 'accbal': account balance. In EURO.
+
+=back
+
+Here is an example:
+
+    $VAR1 = {
+            'availbal' => 'euro amount',
+            'accno' => '0223',
+            'accbal' => 'euro amount',
+            'accname' => 'Switch Current A/C'
+            };
+    $VAR2 = {
+            'availbal' => 'euro amount',
+            'accno' => '2337',
+            'accbal' => 'euro amount',
+            'accname' => 'Visa Card'
+            };
+
+The array can be printed using, for example, a foreach loop like this
+one:
+
+    foreach my $acc (@balance) {
+        printf ("%s ending with %s: %s\n",
+            $acc->{'accname'},
+            $acc->{'accno'},
+            $acc->{'accbal'}
+        );
+    }
+
+=back
+
+=cut
 
 sub check_balance {
 
@@ -199,26 +346,47 @@ sub check_balance {
 
 }
 
-# TODO
+=head2 C<@account_statement = account_statement($config_ref, $account,
+$from, $to, [$type])> - B<public>
+
+=over
+
+This function requires 4 mandatory arguments, the 5th is optional.
+
+=over
+
+=item 1. B<$config_ref>: the hash reference to the configuration
+
+=item 2. B<$account>: in the form account_name - account number
+
+=item 3. B<$from>: from date, in format dd/mm/yyyy
+
+=item 4. B<$to>: to date, in format dd/mm/yyyy
+
+=item 5. B<type> (optional): type of statement (optional). Default: ALL.
+It can be WITHDRAWAL, DEPOSIT or ALL.
+
+=back
+
+The function returns an array of hashes, one hash for each row of the statement.
+The array of hashes can be printed using, for example, a foreach loop like 
+this one:
+
+    foreach my $row (@statement) {
+        printf("%s | %s | %s | %s \n",
+            $row->{date},
+            $row->{description},
+            $row->{euro_amount},
+            $row->{balance});
+    }
+
+=back
+
+=cut
+
 sub account_statement {
-    # TODO: 
-    # - get the argument
-    # - verify if $account exists
-    # - verify if $from and $to are valid
-    # - go to /online/Statement.aspx
-    # - select account select box
-    # - press submit button called "show/order statement"
-    # - select "from date" and "to date"
-    # - select transation type "all" (maybe deposit/withdrawals?)
-    # - press the "show statement button"
-    # - deal with invalid date range (like range old than 6 months)
-    # - parse output page clicking "next" button until the button
-    #   "another statement" is present. all the data must be
-    #   inserted into an array
-    # - return the array to the caller
-    #   array should contain [date, description, euro amount, balance]
     
-    my ($self, $config_ref, $account, $from, $to) = @_;
+    my ($self, $config_ref, $account, $from, $to, $type) = @_;
     my ($res, @ret_array);
 
     $config_ref ||= \%cached_cfg;
@@ -245,14 +413,128 @@ sub account_statement {
         }
     }
 
-    # TODO: call check_balance and fetch the list of accounts
-    # TODO: check the account provided to verify if it exists
-    #       within the array retrieved 
+    # verify if the account exists inside the homebanking
+    my @account = $self->check_balance($config_ref);
+    my $found = 0;
+    foreach my $c (@account) {
+        if($account eq $c->{'accname'}." - ".$c->{'accno'}) {
+            $found = 1;
+            last;   
+        }
+    }
 
-    $self->login($config_ref) or return;
+    if($found) {
 
-    # go to the Statement page
-    $res = $agent->get($BASEURL . '/online/Statement.aspx');
+        $self->login($config_ref) or return;
+
+        # go to the Statement page
+        $res = $agent->get($BASEURL . '/online/Statement.aspx');
+        $agent->save_content("/var/tmp/statement_page.html") 
+            if $config_ref->{debug};
+
+        $agent->field('ddlAccountName', $account);
+        $agent->field('__EVENTTARGET', 'lbtnShow');
+        $res = $agent->submit();
+        # something wrong?
+        if(!$res->is_success) {
+            croak("Unable to get login page!");
+        }
+        $agent->save_content("/var/tmp/statement_page2.html") 
+            if $config_ref->{debug};
+
+        # fill out the "from" date
+        my @d = split "/", $from;
+        $agent->field('ddlFromDay', $d[2]);
+        $agent->field('ddlFromMonth', $d[1]);
+        $agent->field('ddlFromYear', $d[0]);
+
+        # fill out the "to" date
+        @d = split "/", $to;
+        $agent->field('ddlToDay', $d[2]);
+        $agent->field('ddlToMonth', $d[1]);
+        $agent->field('ddlToYear', $d[0]);
+
+        if(defined $type) {
+            $agent->field('grpTransType', 'rbWithdrawal') 
+                if($type == WITHDRAWAL);
+            $agent->field('grpTransType', 'rbDeposit') 
+                if($type == DEPOSIT);
+        }
+
+        $agent->field('__EVENTTARGET', 'lbtnShow');
+        $res = $agent->submit();
+        # something wrong?
+        if(!$res->is_success) {
+            croak("Unable to get login page!");
+        }
+        $agent->save_content("/var/tmp/statement_result.html") 
+            if $config_ref->{debug};
+
+        # PermanentTSB doesn't support statements that include data
+        # older than 6 months... in this case the interface will reset
+        # to the default date range. We just need to print an warning
+        # and submit the current form as is
+        if($agent->content =~ /YOU HAVE REQUESTED DATA OLDER THAN 6 MONTHS/is) {
+
+            carp("PermanentTSB doesn't support queries older than 6".
+                 " months! Resetting to the default date.");
+            $agent->field('__EVENTTARGET', 'lbtnShow');
+            $res = $agent->submit();
+            if(!$res->is_success) {
+                croak("Unable to get login page!");
+            }
+            $agent->save_content("/var/tmp/statement_res_after_6months.html")
+                if $config_ref->{debug};
+        }
+
+        # parse output page clicking "next" button until the
+        # button "another statement" is present. all the data must
+        # be inserted into an array of hashes.
+        # the array should contain an hash per row.
+        # every hash contains [date, description, euro_amount, balance]
+        my $hash_ref = {};
+        while($agent->content =~ /Next/i) {
+            my $p = HTML::TokeParser->new(\$agent->response()->content());
+            while (my $tok = $p->get_tag('table')) {
+                if(defined $tok->[1]{id}) {
+                    if($tok->[1]{id} eq 'tblTransactions'){
+                        while(my $tok2 = $p->get_tag('tr')) {
+                            $hash_ref = {};
+                            my $text = $p->get_trimmed_text('/tr');
+                            #TODO: improve regexp!
+                            # this matches the html row
+                            # dd/mm/yyyy description [-/+] amount balance [-/+]
+                            # example -> 29/09/2008 DUNNES STEPHEN 29/09 - 45.00 25000.00 +
+                            if($text =~ /^(\d{2}\/\d{2}\/\d{4}) (.+) ([-\+] [\d\.]+) ([\d\.]+ [-\+])$/) {
+                                if($config_ref->{debug}) {
+                                    print STDERR "line: $text \n";
+                                }
+                                $hash_ref->{date} = $1;
+                                $hash_ref->{description} = $2;
+                                $hash_ref->{euro_amount} = $3;
+                                $hash_ref->{balance} = $4;
+                                push @ret_array, $hash_ref;
+                            }
+                        }
+                    }
+                }
+            }
+            $agent->field('__EVENTTARGET', 'lbtnShow');
+            $res = $agent->submit();
+            # something wrong?
+            if(!$res->is_success) {
+                croak("Unable to get login page!");
+            }
+        }
+
+    } else {
+
+        # account doesn't exist in the homebanking interface
+        # return undef
+        carp("Account $account not found!");
+        return undef;
+
+    }
 
     return @ret_array;
 
@@ -279,68 +561,82 @@ sub logoff {
 1;
 
 __END__
-=head1 NAME
 
-Finance::Bank::IE::PermanentTSB - Perl Interface to the PermanentTSB
-Open24 homebanking
+=head1 INSTALLATION
 
-=head1 SYNOPSIS
+To install this module type the following:
 
-use Finance::Bank::IE::PermanentTSB;
+    perl Makefile.PL
+    make
+    make test
+    make install
 
-my %config = (
-    "open24numba" => "1060xxxxx",
-    "password" => "your_internet_password",
-    "pan" => "123456",
-    "debug" => 1,
-    );
+=head1 DEPENDENCIES
 
-my @balance = Finance::Bank::IE::PermanentTSB->check_balance(\%config);
-Finance::Bank::IE::PermanentTSB->logoff(\%config);
+This module requires these other modules and libraries:
 
-@balance is an array of hash like this:
-
-$VAR1 = {
-    'availbal' => 'EUR',
-    'accno' => 'EUR',
-    'accbal' => 'EUR',
-    'accname' => 'Switch Current A/C'
-};
-$VAR2 = {
-    'availbal' => 'EUR',
-    'accno' => 'EUR',
-    'accbal' => 'EUR',
-    'accname' => 'Switch Current A/C'
-};
+    WWW::Mechanize
+    HTML::TokeParser
+    Date::Calc
 
 
-=head1 DESCRIPTION
+=head1 MODULE HOMEPAGES
 
-This is a Perl interface to the PermanenteTSB Open24 homebanking.
-
-Features:
+=item * Project homepage on Google code (with SVN repository):
 
 =over
 
-=item * account(s) balance
-
-=item * account(s) statement (to be implemented)
-
-=item * mobile phone top up (to be implemented)
-
-=item * funds transfer (to be implemented)
+L<http://code.google.com/p/finance-bank-ie-permanenttsb>
 
 =back
 
+=item * Project homepage on CPAN.org:
+
+=over
+
+L<http://search.cpan.org/~pallotron/Finance-Bank-IE-PermanentTSB/>
+
+=back
+
+=head1 SYNOPSIS
+
+    use Finance::Bank::IE::PermanentTSB;
+
+    my %config = (
+        "open24numba" => "your open24 number",
+        "password" => "your internet password",
+        "pan" => "your personal access number",
+        "debug" => 1, # <- enable debug messages
+        );
+
+    my @balance = Finance::Bank::IE::PermanentTSB->check_balance(\%config);
+    foreach my $acc (@balance) {
+        printf ("%s ending with %s: %s\n",
+            $acc->{'accname'},
+            $acc->{'accno'},
+            $acc->{'accbal'}
+        );
+    }
+
+    my @statement = Finance::Bank::IE::PermanentTSB->account_statement(
+        \%config,'Switch Current A/C - 2667','2008/12/01','2008/12/31');
+
+    Finance::Bank::IE::PermanentTSB->logoff(\%config);
+
+
 =head1 SEE ALSO
 
-N/A
+=over
+
+=item * Ronan Waider's C<Finance::Bank::IE::BankOfIreland> -
+L<http://search.cpan.org/~waider/Finance-Bank-IE/>
+
+=back
 
 =head1 AUTHOR
 
-Angelo "pallotron" Failla, E<lt>pallotron@freaknet.orgE<gt>
-http://www.pallotron.net
-http://www.vitadiunsysadmin.net
+Angelo "pallotron" Failla, E<lt>pallotron@freaknet.orgE<gt> -
+L<http://www.pallotron.net> - L<http://www.vitadiunsysadmin.net>
 
 =head1 COPYRIGHT AND LICENSE
 

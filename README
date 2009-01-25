@@ -1,32 +1,59 @@
-Finance-Bank-IE-PermanentTSB version 0.01
-=========================================
+NAME
 
-This is an interface to Permanent TSB Ireland homebanking
+    Finance::Bank::IE::PermanentTSB - Perl Interface to the PermanentTSB
+    Open24 homebanking on <http://www.open24.ie>
 
-Finance::Bank::IE::PermanentTSB supports only check_balance at the
-moment.
+DESCRIPTION
 
-INSTALLATION
+    This is a set of functions that can be used in your Perl code to perform
+    some operations with a Permanent TSB homebanking account.
 
-To install this module type the following:
+    Features:
 
-    perl Makefile.PL
-    make
-    make test
-    make install
+    * account(s) balance: retrieves the balance for all the accounts you
+      have set up (current account, visa card, etc.)
+
+    * account(s) statement: retrieves the statement for
+      a particular account, in a range of date.
+
+    * mobile phone top-up (to be implemented): top up your mobile phone!
+
+    * funds transfer (to be implemented): transfer money between your
+      accounts or third party accounts.
 
 DEPENDENCIES
 
-This module requires these other modules and libraries:
+    This module requires these other modules and libraries:
 
-    WWW::Mechanize
-    HTML::TokeParser::Simple
-    Date::Calc
+        WWW::Mechanize
+        HTML::TokeParser
+        Date::Calc
 
-COPYRIGHT AND LICENCE
+MODULE HOMEPAGES
 
-Copyright (C) 2009 by Angelo "pallotron" Failla <pallotron@freaknet.org>
+    * Project homepage on Google code (with SVN repository):
 
-This library is free software; you can redistribute it and/or modify
-it under the same terms as Perl itself, either Perl version 5.8.8 or,
-at your option, any later version of Perl 5 you may have available.
+        <http://code.google.com/p/finance-bank-ie-permanenttsb>
+
+    * Project homepage on CPAN.org:
+
+        <http://search.cpan.org/~pallotron/Finance-Bank-IE-PermanentTSB/>
+
+SEE ALSO
+
+    * Ronan Waider's "Finance::Bank::IE::BankOfIreland" -
+    <http://search.cpan.org/~waider/Finance-Bank-IE/>
+
+AUTHOR
+
+    Angelo "pallotron" Failla, <pallotron@freaknet.org> -
+    <http://www.pallotron.net> - <http://www.vitadiunsysadmin.net>
+
+COPYRIGHT AND LICENSE
+
+    Copyright (C) 2009 by Angelo "pallotron" Failla
+
+    This library is free software; you can redistribute it and/or modify it
+    under the same terms as Perl itself, either Perl version 5.8.8 or, at
+    your option, any later version of Perl 5 you may have available.
+
