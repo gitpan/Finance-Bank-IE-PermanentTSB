@@ -13,5 +13,5 @@ WriteMakefile(
     ABSTRACT_FROM  => 'lib/Finance/Bank/IE/PermanentTSB.pm',
     AUTHOR         => 'Angelo "pallotron" Failla <pallotron@freaknet.org>',
     dist           => { COMPRESS => 'gzip -9f', SUFFIX => 'gz', },
-    clean          => { FILES => 't/tmp' },
+    clean          => { FILES => 't/tmp Makefile.old' },
 );

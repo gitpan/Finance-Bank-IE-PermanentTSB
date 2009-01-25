@@ -4,5 +4,5 @@ MANIFEST
 README
 t/Finance-Bank-IE-PermanentTSB.t
 lib/Finance/Bank/IE/PermanentTSB.pm
-example.pl
 META.yml                                 Module meta-data (added by MakeMaker)
+templates/gnuplot_print.gp
