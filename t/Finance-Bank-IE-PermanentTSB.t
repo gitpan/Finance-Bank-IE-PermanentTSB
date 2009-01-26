@@ -6,7 +6,11 @@
 # change 'tests => 1' to 'tests => last_test_to_print';
 
 use Test::More tests => 1;
-BEGIN { use_ok('Finance::Bank::IE::PermanentTSB') };
+BEGIN { 
+    #TODO: use Test::MockObject to emulate the open24.ie site
+    # mocking the WWW::Mechanize object!
+    use_ok('Finance::Bank::IE::PermanentTSB') 
+};
 
 #########################
 

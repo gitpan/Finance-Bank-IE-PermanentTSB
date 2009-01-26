@@ -1,5 +1,15 @@
 Revision history for Perl extension Finance::Bank::IE::PermanentTSB.
 
+0.05
+    - account_statement() prototype has been changed
+    - account type constants have been introduced
+    - created CLI utility called ptsb that can be
+      used by a user to interact with his/her homebanking
+      account. this is still working in progress...
+
+0.04 Sun Jan 25 23:40:00 GMT 2009
+    - minor changes
+
 0.03 Sun Jan 25 01:41:41 GMT 2009
     - implemented function account_statement()
     - perlpod documentation improved

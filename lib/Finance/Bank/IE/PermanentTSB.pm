@@ -26,6 +26,66 @@ accounts or third party accounts.
 
 =back
 
+=cut
+
+package Finance::Bank::IE::PermanentTSB;
+
+our $VERSION = '0.05';
+
+use strict;
+use warnings;
+use Data::Dumper;
+use WWW::Mechanize;
+use HTML::TokeParser;
+use Carp qw(croak carp);
+use Date::Calc qw(check_date);
+
+use base 'Exporter';
+# export by default the check_balance function and the constants
+our @EXPORT = qw(check_balance ALL WITHDRAWAL DEPOSIT VISA_ACCOUNT SWITCH_ACCOUNT);
+our @EXPORT_OK = qw(mobile_topup account_statement);
+
+my %cached_cfg;
+my $agent;
+my $lastop = 0;
+
+my $BASEURL = "https://www.open24.ie/";
+
+=head1 CONSTANTS
+
+The constants below are used with the account_statement() function:
+
+=over
+
+=item * C<ALL>: shortcut for (WITHDRAWAL and DEPOSIT);
+
+=item * C<WITHDRAWAL>: shows only the WITHDRAWALs;
+
+=item * C<DEPOSIT>: shows only the DEPOSITs;
+
+=item * C<VISA_ACCOUNT>: the account refers to a Visa Card;
+
+=item * C<SWITCH_ACCOUNT>: the account is a normal Current Account;
+
+=back
+
+=cut
+
+# constant to be used with the account_statement() function
+use constant {
+
+    # statement types
+    ALL            => 0, # prints all the transactions 
+                         # (WITHDRAWAL and DEPOSIT)
+    WITHDRAWAL     => 1, # shows only the WITHDRAWALs
+    DEPOSIT        => 2, # shows only the DEPOSITs
+
+    # account types
+    VISA_ACCOUNT   => 'Visa Card', # visa card account
+    SWITCH_ACCOUNT => 'Switch Current A/C', # switch current account
+
+};
+
 =head1 METHODS / FUNCTIONS
 
 Every function in this module requires, as the first argument, a reference 
@@ -38,38 +98,6 @@ to an hash which contains the configuration:
         "debug" => 1,
     );
 
-=cut
-
-package Finance::Bank::IE::PermanentTSB;
-
-our $VERSION = '0.04';
-
-use strict;
-use warnings;
-use Data::Dumper;
-use WWW::Mechanize;
-use HTML::TokeParser;
-use Carp qw(croak carp);
-use Date::Calc qw(check_date);
-
-use base 'Exporter';
-# export by default the check_balance function and the constants
-our @EXPORT = qw(check_balance ALL WITHDRAWAL DEPOSIT);
-our @EXPORT_OK = qw(mobile_topup account_statement);
-
-my %cached_cfg;
-my $agent;
-my $lastop = 0;
-
-my $BASEURL = "https://www.open24.ie/";
-
-# constant to be used with the account_statement() function
-use constant {
-    ALL =>        0,
-    WITHDRAWAL => 1,
-    DEPOSIT =>    2,
-};
-
 =head2 C<$boolean = login($config_ref)> - B<private>
 
 =over
@@ -81,7 +109,8 @@ This function performs the login. It takes just one required argument,
 which is an hash reference for the configuration.
 The function returns true (1) if success or false (0) for any other
 state.
-If debug => 1 then it will dump the html page on /var/tmp/.
+If debug => 1 then it will dump the html page on the current working
+directory. 
 Please be aware that this has a security risk. The information will
 persist on your filesystem until you reboot your machine (and /var/tmp
 get clean at boot time).
@@ -146,7 +175,7 @@ sub login {
 
     # retrieve the login page
     my $res = $agent->get($BASEURL . '/online/login.aspx');
-    $agent->save_content('/var/tmp/loginpage.html') if $config_ref->{debug};
+    $agent->save_content('./loginpage.html') if $config_ref->{debug};
 
     # something wrong?
     if(!$res->is_success) {
@@ -173,7 +202,7 @@ sub login {
     if(!$res->is_success) {
         croak("Unable to get page!");
     }
-    $agent->save_content("/var/tmp/step1_result.html") if $config_ref->{debug};
+    $agent->save_content("./step1_result.html") if $config_ref->{debug};
 
     # Login - Step 2 of 2
     if(!$agent->content =~ /LOGIN STEP 2 OF 2/is) {
@@ -181,7 +210,7 @@ sub login {
     } else {
         set_pan_fields($agent, $config_ref);
         $res = $agent->submit();
-        $agent->save_content("/var/tmp/step2_pan_result.html") 
+        $agent->save_content("./step2_pan_result.html") 
             if $config_ref->{debug};
     }
 
@@ -256,7 +285,8 @@ sub set_pan_fields {
 =over
 
 This function require the configuration hash reference as argument.
-It retruns an array of hashes, one hash for each account. 
+It returns an array of hashes, one hash for each account. 
+In case of error it return undef;
 Each hash has these keys:
 
 =over
@@ -309,7 +339,7 @@ sub check_balance {
     $config_ref ||= \%cached_cfg;
     my $croak = ($config_ref->{croak} || 1);
  
-    $self->login($config_ref) or return;
+    $self->login($config_ref) or return undef;
 
     $res = $agent->get($BASEURL . '/online/Account.aspx');
     my $p = HTML::TokeParser->new(\$agent->response()->content());
@@ -346,8 +376,8 @@ sub check_balance {
 
 }
 
-=head2 C<@account_statement = account_statement($config_ref, $account,
-$from, $to, [$type])> - B<public>
+=head2 C<@account_statement = account_statement($config_ref, $acc_tupe,
+$acc_no, $from, $to, [$type])> - B<public>
 
 =over
 
@@ -357,20 +387,16 @@ This function requires 4 mandatory arguments, the 5th is optional.
 
 =item 1. B<$config_ref>: the hash reference to the configuration
 
-=item 2. B<$account>: in the form account_name - account number. 
+=item 2. B<$acc_type>: this is a constant: can be VISA_ACCOUNT or SWITCH_ACCOUNT
 
-=over
+=item 3. B<$acc_no>: this is a 4 digits field representing the last 4
+digits of the account number (or Visa card number)
 
- Current Account have to be in the form 'Switch Current A/C - xyzt'
- Visa Card account have to be in the form 'Visa Card - xyzt'
+=item 4. B<$from>: from date, in format dd/mm/yyyy
 
-=back
+=item 5. B<$to>: to date, in format dd/mm/yyyy
 
-=item 3. B<$from>: from date, in format dd/mm/yyyy
-
-=item 4. B<$to>: to date, in format dd/mm/yyyy
-
-=item 5. B<$type> (optional): type of statement (optional). Default: ALL.
+=item 6. B<$type> (optional): type of statement (optional). Default: ALL.
 It can be WITHDRAWAL, DEPOSIT or ALL.
 
 =back
@@ -387,17 +413,28 @@ this one:
             $row->{balance});
     }
 
+Undef is returned in case of error;
+
 =back
 
 =cut
 
 sub account_statement {
     
-    my ($self, $config_ref, $account, $from, $to, $type) = @_;
+    my ($self, $config_ref, $acc_type, $acc_no, $from, $to, $type) = @_;
     my ($res, @ret_array);
 
     $config_ref ||= \%cached_cfg;
     my $croak = ($config_ref->{croak} || 1);
+
+    if($acc_type ne SWITCH_ACCOUNT and $acc_type ne VISA_ACCOUNT) {
+        carp("Account type is invalid");
+        return undef;
+    }
+
+    my $account = $acc_type." - ".$acc_no;
+
+    print $account,"\n";
 
     if(defined $from and defined $to) {
         # check date_from, date_to
@@ -405,18 +442,21 @@ sub account_statement {
             # date should be in format yyyy/mm/dd
             if(not $date  =~ m/^\d{4}\/\d{2}\/\d{2}$/) {
                 carp("Date $date should be in format 'yyyy/mm/dd'");
+                return undef;
             }
             # date should be valid, this is using Date::Calc->check_date()
             my @d = split "/", $date;
             if (not check_date($d[0],$d[1],$d[2])) {
                 carp("Date $date is not valid!");
+                return undef;
             }
         }
     }
 
     if(defined $account) {
         if(not $account =~ m/.+ - \d{4}$/) {
-            carp("Account $account should be in format 'account_name - integer'");
+            carp("$account is invalid");
+            return undef;
         }
     }
 
@@ -424,7 +464,7 @@ sub account_statement {
     my @account = $self->check_balance($config_ref);
     my $found = 0;
     foreach my $c (@account) {
-        if($account eq $c->{'accname'}." - ".$c->{'accno'}) {
+        if($account  eq $c->{'accname'}." - ".$c->{'accno'}) {
             $found = 1;
             last;   
         }
@@ -436,7 +476,7 @@ sub account_statement {
 
         # go to the Statement page
         $res = $agent->get($BASEURL . '/online/Statement.aspx');
-        $agent->save_content("/var/tmp/statement_page.html") 
+        $agent->save_content("./statement_page.html") 
             if $config_ref->{debug};
 
         $agent->field('ddlAccountName', $account);
@@ -446,7 +486,7 @@ sub account_statement {
         if(!$res->is_success) {
             croak("Unable to get page!");
         }
-        $agent->save_content("/var/tmp/statement_page2.html") 
+        $agent->save_content("./statement_page2.html") 
             if $config_ref->{debug};
 
         # fill out the "from" date
@@ -474,7 +514,7 @@ sub account_statement {
         if(!$res->is_success) {
             croak("Unable to get page!");
         }
-        $agent->save_content("/var/tmp/statement_result.html") 
+        $agent->save_content("./statement_result.html") 
             if $config_ref->{debug};
 
         # PermanentTSB doesn't support statements that include data
@@ -490,7 +530,7 @@ sub account_statement {
             if(!$res->is_success) {
                 croak("Unable to get page!");
             }
-            $agent->save_content("/var/tmp/statement_res_after_6months.html")
+            $agent->save_content("./statement_res_after_6months.html")
                 if $config_ref->{debug};
         }
         
@@ -596,7 +636,7 @@ sub logoff {
     my $config_ref = shift;
 
     my $res = $agent->get($BASEURL . '/online/DoLogOff.aspx');
-    $agent->save_content("/var/tmp/logoff.html") if $config_ref->{debug};
+    $agent->save_content("./logoff.html") if $config_ref->{debug};
 }
 
 1;
