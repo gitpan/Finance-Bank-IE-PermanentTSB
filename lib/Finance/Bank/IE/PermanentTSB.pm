@@ -30,7 +30,7 @@ accounts or third party accounts.
 
 package Finance::Bank::IE::PermanentTSB;
 
-our $VERSION = '0.05';
+our $VERSION = '0.06';
 
 use strict;
 use warnings;
@@ -38,7 +38,7 @@ use Data::Dumper;
 use WWW::Mechanize;
 use HTML::TokeParser;
 use Carp qw(croak carp);
-use Date::Calc qw(check_date);
+use Date::Calc qw(check_date Delta_Days);
 
 use base 'Exporter';
 # export by default the check_balance function and the constants
@@ -427,35 +427,52 @@ sub account_statement {
     $config_ref ||= \%cached_cfg;
     my $croak = ($config_ref->{croak} || 1);
 
-    if($acc_type ne SWITCH_ACCOUNT and $acc_type ne VISA_ACCOUNT) {
-        carp("Account type is invalid");
-        return undef;
+    if(defined $acc_type) { 
+        if($acc_type ne SWITCH_ACCOUNT and $acc_type ne VISA_ACCOUNT) {
+            carp("Account type is invalid");
+            return undef;
+        }
+    } else {
+        croak("Account type not defined");
     }
 
     my $account = $acc_type." - ".$acc_no;
 
-    print $account,"\n";
-
     if(defined $from and defined $to) {
+
+        # $from should be > of $to
+
+        my @d_from = split "/", $from;
+        my @d_to   = split "/", $to;
+        if (Delta_Days($d_from[0],$d_from[1],$d_from[2],
+                       $d_to[0],$d_to[1],$d_to[2]) <= 0) {
+
+            croak("Date range $from -> $to invalid.");
+
+        }
+
         # check date_from, date_to
         foreach my $date ($from, $to) {
             # date should be in format yyyy/mm/dd
-            if(not $date  =~ m/^\d{4}\/\d{2}\/\d{2}$/) {
-                carp("Date $date should be in format 'yyyy/mm/dd'");
+            if(not $date  =~ /^\d{4}\/\d{2}\/\d{2}$/) {
+                croak("Date $date should be in format 'yyyy/mm/dd'");
                 return undef;
             }
             # date should be valid, this is using Date::Calc->check_date()
             my @d = split "/", $date;
             if (not check_date($d[0],$d[1],$d[2])) {
-                carp("Date $date is not valid!");
+                croak("Date $date is not valid!");
                 return undef;
             }
         }
+    } else {
+        croak("Date range not defined");
+        return undef;
     }
 
     if(defined $account) {
         if(not $account =~ m/.+ - \d{4}$/) {
-            carp("$account is invalid");
+            croak("$account is invalid");
             return undef;
         }
     }
@@ -532,6 +549,12 @@ sub account_statement {
             }
             $agent->save_content("./statement_res_after_6months.html")
                 if $config_ref->{debug};
+        }
+
+        if($agent->content =~ /INCORRECT DATE CRITERIA ENTERED: 'TO DATE' WAS IN THE FUTURE./is) {
+
+            carp("Incorrect date criteria entered: 'to date' was in the".
+                 " future! Resetting to the default date. ");
         }
         
         # parse output page clicking "next" button until the
@@ -637,6 +660,10 @@ sub logoff {
 
     my $res = $agent->get($BASEURL . '/online/DoLogOff.aspx');
     $agent->save_content("./logoff.html") if $config_ref->{debug};
+}
+
+END {
+    logoff if $lastop;
 }
 
 1;

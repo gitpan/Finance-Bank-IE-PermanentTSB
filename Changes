@@ -1,6 +1,13 @@
 Revision history for Perl extension Finance::Bank::IE::PermanentTSB.
 
-0.05
+0.06 Mon Jan 26 22:09:56 GMT 2009
+    - added --regexp feature to the ptsb script
+    - added date check to account_statement()
+      from_date should be > of to_date
+    - added date chedk: from_date cannot be in the future
+    - added option -v to ptsb
+
+0.05 Sun Jan 25 16:00:00 GMT 2009
     - account_statement() prototype has been changed
     - account type constants have been introduced
     - created CLI utility called ptsb that can be

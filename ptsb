@@ -6,6 +6,9 @@ use FindBin;
 use Data::Dumper;
 use lib "$FindBin::Bin/lib"; # load modules from "lib" subdir relative to this script
 use Finance::Bank::IE::PermanentTSB;
+use Getopt::Long;
+use Date::Calc qw(check_date);
+use Switch;
 
 sub usage {
   use Pod::Usage;
@@ -15,48 +18,25 @@ sub usage {
 # main program
 sub main {
 
-    # default config file is in ~/.ptsbrc
-    my $file = $ENV{HOME}."/.ptsbrc";
+    my $cf = {};
 
-    # parse options
-
-    # validate options
+    # parse and validate options
+    parse_options($cf);
+    validate_options($cf);
     
     # read config file
-    my ($open24_num, $pass, $pan) = parse_configfile($file);
-    # die if some of the arguments are undef
-    foreach $i ($open24_num, $pass, $pan) {
-        if(not defined $i) {
-            die ("invalid configuration file!");
-        }
-    }
+    ($cf->{open24_num}, $cf->{pass}, $cf->{pan}) = 
+        parse_configfile($cf->{cfgfile});
 
-    my %config = (
-        "open24numba" => $open24_num,
-        "password" => $pass,
-        "pan" => $pan,
-        "debug" => 1,
-    );
+    print STDERR Dumper($cf) if($cf->{debug});
 
     # execute options
-
-#---------------------------------------------------------------------------
-#  Temporary code
-#---------------------------------------------------------------------------
-    my @statement = Finance::Bank::IE::PermanentTSB->account_statement(
-        \%config, SWITCH_ACCOUNT, '0220','2008/08/01','2009/01/25');
-
-    foreach my $row (@statement) {
-        printf("%s | %s | %s | %s\n",
-            $row->{date},
-            $row->{description},
-            $row->{euro_amount},
-            $row->{balance});
+    if($cf->{balance}) {
+        balance($cf);
     }
-
-#---------------------------------------------------------------------------
-#  End of temporary code
-#---------------------------------------------------------------------------
+    if($cf->{statement}) {
+        statement($cf);
+    }
 
     # exit
     exit 0;
@@ -81,7 +61,262 @@ sub parse_configfile {
         }
     }
     close FILE;
+
+    # die if some of the arguments are undef
+    foreach $i ($user, $pass, $pan) {
+        if(not defined $i) {
+            die ("invalid configuration file!");
+        }
+    }
+
+
     return ($user, $pass, $pan);
+}
+
+sub parse_options {
+
+    my $cf = shift;
+
+    # set some defaults
+
+    # default config file is in ~/.ptsbrc
+    $cf->{cfgfile} = $ENV{HOME}."/.ptsbrc";
+    $cf->{no_balance} = 0;
+
+    # =o -> Extended integer, Perl style. This can be either an optional
+    # leading plus or minus sign, followed by a sequence of digits, or
+    # an octal string (a zero, optionally followed by '0', '1', .. '7'),
+    # or a hexadecimal string (0x followed by '0' .. '9', 'a' .. 'f',
+    # case insensitive), or a binary string (0b followed by a series of
+    # '0' and '1').
+    #
+    # =s -> string
+    # =i -> integer
+
+    my $error;
+    # be case sensitive!
+    Getopt::Long::Configure ("bundling");
+    # pase opts, put everything in the $cf hash_ref
+    Getopt::Long::GetOptions(
+        "file|f=s" => \$cf->{'cfgfile'},
+        "help|h" => \$cf->{'help'},
+        "debug|D" => \$cf->{'debug'},
+        "balance|b" => \$cf->{'balance'},
+        "statement|s" => \$cf->{'statement'},
+        "statement-type|T=s" => \$cf->{'statement_type'},
+        "from-date|f=s" => \$cf->{'fromdate'},
+        "to-date|t=s" => \$cf->{'todate'},
+        "account-type|a=s" => \$cf->{'acc_type'},
+        "account-num|n=s" => \$cf->{'acc_no'},
+        "no-balance|N" => \$cf->{'no_balance'},
+        "regexp|r=s" => \$cf->{'regexp'},
+        "version|v" => \$cf->{'version'},
+    ) or $error = 1;
+
+    usage if($error or $cf->{'help'});
+
+}
+
+sub validate_options {
+
+    my $cf = shift;
+
+
+    # balance and statement cannot stay together
+    if($cf->{balance} and $cf->{statement}) {
+        print "You can not select -s and -b together!\n";
+        print "You can only select one operation at a time!\n";
+        exit -1;
+    }
+
+    if(defined $cf->{acc_type}) {
+        # acc_type must be 'c' or 'v'
+        switch ($cf->{acc_type}) {
+            case "c" { $cf->{acc_type} = SWITCH_ACCOUNT; }
+            case "v" { $cf->{acc_type} = VISA_ACCOUNT; }
+            else     {
+                print("Account type invalid\n");
+                exit -1;
+            }
+        }
+    }
+    
+    if(defined $cf->{statement_type}) {
+        # acc_type must be 'c' or 'v'
+        switch ($cf->{statement_type}) {
+            case /WITHDRAWAL/is { $cf->{statement_type} = WITHDRAWAL; }
+            case /DEPOSIT/is { $cf->{statement_type} = DEPOSIT; }
+            case /ALL/is { $cf->{statement_type} = ALL; }
+            else     {
+                print("Statement type invalid\n");
+                exit -1;
+            }
+        }
+    }
+
+    if(defined $cf->{version}) {
+        print Finance::Bank::IE::PermanentTSB->VERSION, "\n";
+        exit 0;
+    }
+
+    # all the other check are made by Finance::Bank::IE::PermanentTSB
+}
+
+sub balance {
+    
+    my $cf = shift;
+
+    my %config = (
+        "open24numba" => $cf->{open24_num},
+        "password" => $cf->{pass},
+        "pan" => $cf->{pan},
+        "debug" => $cf->{debug},
+    );
+
+    my @balance = Finance::Bank::IE::PermanentTSB->check_balance(
+        \%config, 
+        $cf->{acc_type}, 
+        $cf->{acc_no}, 
+        $cf->{fromdate},
+        $cf->{todate});
+
+    print STDERR Dumper(@balance) if($cf->{debug});
+
+    my $colname = "Account name";
+    my $coldigit = "Acc. #";
+    my $colbal = "Balance";
+    my $colavail = "Available";
+    for(0...58) { 
+        print("-"); 
+    }
+    print "\n";
+
+    printf("| %18s | %6s | %11s | %11s |", $colname, $coldigit, $colbal,
+        $colavail);
+    print "\n";
+    for(0...58) { 
+        print("-"); 
+    }
+    print "\n";
+
+    foreach my $row (@balance) {
+        printf("| %18s | %6s | %11s | %11s |\n",
+            $row->{accname},
+            $row->{accno},
+            $row->{accbal},
+            $row->{availbal});
+    }
+    
+    for(0...58) { 
+        print("-"); 
+    }
+    print "\n";
+
+
+}
+
+sub statement {
+
+    my $cf = shift;
+    my $counter_deposit;
+    my $counter_withdrawal;
+
+    my %config = (
+        "open24numba" => $cf->{open24_num},
+        "password" => $cf->{pass},
+        "pan" => $cf->{pan},
+        "debug" => $cf->{debug},
+    );
+
+    my @statement = Finance::Bank::IE::PermanentTSB->account_statement(
+        \%config,
+        $cf->{acc_type},
+        $cf->{acc_no},
+        $cf->{fromdate},
+        $cf->{todate},
+        $cf->{statement_type},
+    );
+
+    print STDERR Dumper(@statement) if($cf->{debug});
+
+    if ($cf->{no_balance}) {
+        for(0...54) { 
+            print("-"); 
+        }
+    } else {
+        for(0...68) { 
+            print("-"); 
+        }
+    }
+    print "\n";
+    my $coldate = "Date"; 
+    my $coldesc = "Description";
+    my $colam   = "Amount";
+    my $colbal  = "Balance";
+    printf("| %10s | %24s | %11s |", $coldate, $coldesc, $colam);
+    printf(" %11s |", $colbal) if(not $cf->{no_balance});
+    print "\n";
+    if ($cf->{no_balance}) {
+        for(0...54) { 
+            print("-"); 
+        }
+    } else {
+        for(0...68) { 
+            print("-"); 
+        }
+    }
+    print "\n";
+
+    my $print = 1;
+    foreach my $row (@statement) {
+        my $regex = $cf->{regexp};
+        if($row->{description} =~ /$regex/is) {
+            $print = 1;
+        } else {
+            $print = 0;
+        }
+        if($print) {
+            printf("| %s | %24s | %11s ",
+                $row->{date},
+                $row->{description},
+                $row->{euro_amount},
+            );
+            if(not $cf->{no_balance}) {
+                printf "| %11s ", $row->{balance};
+            }
+            print "|\n";
+            if($row->{euro_amount}<0) {
+                $counter_withdrawal += $row->{euro_amount};
+            } else {
+                $counter_deposit += $row->{euro_amount};
+            }
+        }
+
+    }
+    if ($cf->{no_balance}) {
+        for(0...54) { 
+            print("-"); 
+        }
+    } else {
+        for(0...68) { 
+            print("-"); 
+        }
+    }
+    print "\n";
+
+
+    print "\n=== Totals ===\n";
+    if($cf->{statement_type} == ALL or $cf->{statement_type} == DEPOSIT) {
+        print "Total deposit: $counter_deposit\n";
+    }
+    if($cf->{statement_type} == ALL or $cf->{statement_type} ==
+        WITHDRAWAL) {
+        print "Total withdrawal: $counter_withdrawal\n";
+    }
+    if($cf->{statement_type} == ALL) {
+        printf("Profit: %f\n", $counter_deposit+$counter_withdrawal);
+    }
+
 }
 
 __END__
@@ -94,11 +329,11 @@ ptsb - Interact with you Permanent TSB homebanking!
 
 ptsb [options] 
 
-=head2 Print account balance:
+=head2 Print accounts balance:
 
 =over 2
 
-ptsb [ -F F</path/of/conf/file> ] -b -a c -n <4digits>
+ptsb [ -F F</path/of/conf/file> ] -b
 
 =back
 
@@ -107,7 +342,7 @@ ptsb [ -F F</path/of/conf/file> ] -b -a c -n <4digits>
 =over 2
 
 ptsb [ -F F</path/of/conf/file> ] -s -a c -n <4digits>
-       -f dd/mm/yyyy  -t dd/mm/yyyy
+       -f yyyy/mm/dd  -t yyyy/mm/dd
 
 =back
 
@@ -118,6 +353,11 @@ ptsb [ -F F</path/of/conf/file> ] -s -a c -n <4digits>
 =item B<-h | --help>
 
 this help usage message!
+
+=item B<-D | --debug>
+
+Enable debug. This will be more verbose and will leave html
+on the current working directory.
 
 =item B<-F F</path/to/config/file> | --file F</path/to/config/file>>      
 
@@ -132,22 +372,39 @@ print account balance
 
 print account statement
 
-=item B<-f | --from--date dd/mm/yyyy>
+=item B<-T type | --transation-type type>
+
+Type of transaction to look on the statement.
+Type can be: ALL, WITHDRAWAL, DEPOSIT
+
+=item B<-f | --from--date yyyy/mm/dd>
 
 from date
 
-=item B<-t | --to-date dd/mm/yyyy>
+=item B<-t | --to-date yyyy/mm/dd>
 
 to date
 
-=item B<-a <lt>c | v<gt> | --account-type <lt>c | v<gt>>
+=item B<-a [c | v] | --account-type [c | v]>
 
-account type: can be 'c' or 'v'
+account type: can be 'c' (current account) or 'v' for (visa card)
 
-=item B<-n digits>
+=item B<-n digits | --account-num digits>
 
 4 digits representing the last 4 digits of the account number or visa
 card number.
+
+=item B<-N | --no-balance>
+
+Do not print balance when printing statement.
+
+=item B<-r | --regexp>
+
+When printing statement grep using the regexp provided
+
+=item B<-v | --version>
+
+Print version
 
 =back
 
@@ -155,15 +412,15 @@ card number.
 
 Configuration file default location is F<~/.ptsbrc> and it looks like this:
 
--------8< -- ~/.ptsbrc -->8----------
+    -------8< -- ~/.ptsbrc -->8----------
 
-open24_number=your_open24_number
+    open24_number=your_open24_number
 
-password=your_internet_password
+    password=your_internet_password
 
-pan=your_personal_access_number
+    pan=your_personal_access_number
 
--------8< --------------->8----------
+    -------8< --------------->8----------
 
 However you can put wherever you want. Just remember to use then the
 option -F F</path/to/your/location>.

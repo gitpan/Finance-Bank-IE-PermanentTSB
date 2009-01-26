@@ -1,0 +1,14 @@
+- convert to OOP rather than functional programming
+
+- ~/.ptsb should be gpg encrypted
+
+- balance_graph(accountname, from, to, fileoutput)
+  uses gnuplot to graph
+
+- test units (using Mock Objects)
+
+- check on login for invalid credentials
+  
+  - wrong username
+  - wrong password
+  - wrong pan
