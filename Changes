@@ -1,6 +1,10 @@
 Revision history for Perl extension Finance::Bank::IE::PermanentTSB.
 
-0.07
+0.08 Tue Jan 27 12:16:44 GMT 2009
+    - ~/.ptsbrc file now encrypted using gnupg
+      GnuPG and a priv/pub is now required to use ptsb
+
+0.07 Tue Jan 27 00:13:00 GMT 2009
     - FIXED in PermanentTSB.pm: duplicated values on the array of 
       statement row. last element of statement page was the same 
       of the fist one of the next page. fucking permanent tsb web 

@@ -4,11 +4,12 @@
 
 use FindBin;
 use Data::Dumper;
-use lib "$FindBin::Bin/lib"; # load modules from "lib" subdir relative to this script
+use lib "$FindBin::RealBin/lib"; # load modules from "lib" subdir relative to this script
 use Finance::Bank::IE::PermanentTSB;
 use Getopt::Long;
 use Date::Calc qw(check_date);
 use Switch;
+use File::Copy;
 
 sub usage {
   use Pod::Usage;
@@ -23,8 +24,8 @@ sub main {
     # parse and validate options
     parse_options($cf);
     validate_options($cf);
-    
-    # read config file
+
+    # parse config file
     ($cf->{open24_num}, $cf->{pass}, $cf->{pan}) = 
         parse_configfile($cf->{cfgfile});
 
@@ -32,9 +33,11 @@ sub main {
 
     # execute options
     if($cf->{balance}) {
+        print "\nConnecting...\n";
         balance($cf);
     }
     if($cf->{statement}) {
+        print "\nConnecting...\n";
         statement($cf);
     }
 
@@ -47,10 +50,48 @@ main;
 
 # parse config file to retrieve acc_no, password and pan
 sub parse_configfile {
+
     my $cfgfile = shift;
-    open(FILE, $cfgfile) or 
-        die "Cannot open config file $cfgfile. Error was: \"$!\"\n";
-    while(<FILE>) {
+
+    $gpg = `which gpg`;
+    chop $gpg;
+
+    if($gpg =~ /not found/ or not -x $gpg) {
+        print "You need to install and use GnuPG to secure your config file\n";
+        print "Please see the documentation on \n".
+        "http://search.cpan.org/~pallotron/Finance-Bank-IE-PermanentTSB/ptsb\n";
+        exit -1;
+    } 
+
+    # encryption dance
+    # use the 'file' command to check the cfgfile
+    my $res = `file $cfgfile`;
+    if($res !~ /GPG encrypted data/is) {
+        # not encrypted: encrypt it!
+        print("Config file not encrypted. I'm gonna encrypt it!\n");
+        print("Executing gpg.. \n");
+        print("You'll have to type the name of the key you want to use\n");
+        system('gpg -e '.$cfgfile);
+        # checking exit status
+        if($? != 0 ) {
+            # problem with gpg?
+            print "Exiting...\n";
+            exit -1;
+        }
+        # If file has been create overwrite the original one
+        if(-e $cfgfile.'.gpg') {
+            move($cfgfile.'.gpg', $cfgfile);
+        }
+        # now the config file is crypted!
+    }
+
+    # decrypt file in memory
+    my @res = `gpg -d $cfgfile`;
+    
+    # go thru the lines...
+    foreach my $line (@res) {
+        $line =~ s/\n//g;
+        $_ = $line;
         if(not /^\s{0,}#/ or not /^\s{0,}/) {
             my ($key, $val) = split '=';
             $val =~ s/^\s+//;
@@ -60,7 +101,6 @@ sub parse_configfile {
             $pan = $val if($key eq 'pan');
         }
     }
-    close FILE;
 
     # die if some of the arguments are undef
     foreach $i ($user, $pass, $pan) {
@@ -68,7 +108,6 @@ sub parse_configfile {
             die ("invalid configuration file!");
         }
     }
-
 
     return ($user, $pass, $pan);
 }
@@ -153,7 +192,7 @@ sub validate_options {
         
     }
 
-    if($cf->{acc_type} == VISA_ACCOUNT) {
+    if($cf->{acc_type} =~ /VISA/is) {
         $cf->{no_balance} = 1;
         $cf->{statement_type} = ALL;
     }
@@ -222,10 +261,10 @@ sub balance {
 sub statement {
 
     my $cf = shift;
-    my $counter_deposit;
-    my $counter_withdrawal;
-    my $initial_balance;
-    my $final_balance;
+    my $counter_deposit = 0;
+    my $counter_withdrawal = 0;
+    my $initial_balance = 0;
+    my $final_balance = 0;
 
     my %config = (
         "open24numba" => $cf->{open24_num},
@@ -328,6 +367,7 @@ sub statement {
     $final_balance = $statement[$#statement]->{balance};
     $final_balance =~ s/[\+|-]//;
     if(not $cf->{no_balance}) {
+        print "\n";
         print "Initial Balance: ", $initial_balance, "\n";
         print "Final Balance: ", $final_balance, "\n";
         printf "Delta Balance: %f\n", $final_balance-$initial_balance;
@@ -442,6 +482,10 @@ However you can put wherever you want. Just remember to use then the
 option -F F</path/to/your/location>.
 
 Lines beginning with # will be interpreted as comment.
+
+Starting from release 0.08 ptsb will use GnuPG to encrypt the
+configuration file using the private key of the user.
+Therefore you'll have to create your key if you didn't do this yet.
 
 =head1 SEE ALSO
 
