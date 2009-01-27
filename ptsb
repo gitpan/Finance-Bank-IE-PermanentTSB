@@ -113,8 +113,6 @@ sub parse_options {
         "version|v" => \$cf->{'version'},
     ) or $error = 1;
 
-    $error = 1 if ($0 =~ /ptsb$/);
-
     usage if($error or $cf->{'help'});
 
 }
