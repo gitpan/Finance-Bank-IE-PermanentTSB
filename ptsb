@@ -113,6 +113,8 @@ sub parse_options {
         "version|v" => \$cf->{'version'},
     ) or $error = 1;
 
+    $error = 1 if ($0 =~ /ptsb$/);
+
     usage if($error or $cf->{'help'});
 
 }
@@ -120,7 +122,6 @@ sub parse_options {
 sub validate_options {
 
     my $cf = shift;
-
 
     # balance and statement cannot stay together
     if($cf->{balance} and $cf->{statement}) {
@@ -142,7 +143,6 @@ sub validate_options {
     }
     
     if(defined $cf->{statement_type}) {
-        # acc_type must be 'c' or 'v'
         switch ($cf->{statement_type}) {
             case /WITHDRAWAL/is { $cf->{statement_type} = WITHDRAWAL; }
             case /DEPOSIT/is { $cf->{statement_type} = DEPOSIT; }
@@ -152,6 +152,12 @@ sub validate_options {
                 exit -1;
             }
         }
+        
+    }
+
+    if($cf->{acc_type} == VISA_ACCOUNT) {
+        $cf->{no_balance} = 1;
+        $cf->{statement_type} = ALL;
     }
 
     if(defined $cf->{version}) {
@@ -220,6 +226,8 @@ sub statement {
     my $cf = shift;
     my $counter_deposit;
     my $counter_withdrawal;
+    my $initial_balance;
+    my $final_balance;
 
     my %config = (
         "open24numba" => $cf->{open24_num},
@@ -253,7 +261,7 @@ sub statement {
     my $coldesc = "Description";
     my $colam   = "Amount";
     my $colbal  = "Balance";
-    printf("| %10s | %24s | %11s |", $coldate, $coldesc, $colam);
+    printf("| %10s | %25s | %11s |", $coldate, $coldesc, $colam);
     printf(" %11s |", $colbal) if(not $cf->{no_balance});
     print "\n";
     if ($cf->{no_balance}) {
@@ -276,7 +284,7 @@ sub statement {
             $print = 0;
         }
         if($print) {
-            printf("| %s | %24s | %11s ",
+            printf("| %s | %25s | %11s ",
                 $row->{date},
                 $row->{description},
                 $row->{euro_amount},
@@ -305,7 +313,7 @@ sub statement {
     print "\n";
 
 
-    print "\n=== Totals ===\n";
+    print "\n=== Totals ===\n\n";
     if($cf->{statement_type} == ALL or $cf->{statement_type} == DEPOSIT) {
         print "Total deposit: $counter_deposit\n";
     }
@@ -315,6 +323,16 @@ sub statement {
     }
     if($cf->{statement_type} == ALL) {
         printf("Profit: %f\n", $counter_deposit+$counter_withdrawal);
+    }
+
+    $initial_balance = $statement[0]->{balance};
+    $initial_balance =~ s/[\+|-]//;
+    $final_balance = $statement[$#statement]->{balance};
+    $final_balance =~ s/[\+|-]//;
+    if(not $cf->{no_balance}) {
+        print "Initial Balance: ", $initial_balance, "\n";
+        print "Final Balance: ", $final_balance, "\n";
+        printf "Delta Balance: %f\n", $final_balance-$initial_balance;
     }
 
 }

@@ -2,7 +2,6 @@ use strict;
 use warnings;
 use ExtUtils::MakeMaker;
 
-
 WriteMakefile(
     NAME              => 'Finance::Bank::IE::PermanentTSB',
     VERSION_FROM      => 'lib/Finance/Bank/IE/PermanentTSB.pm', # finds $VERSION
@@ -13,8 +12,7 @@ WriteMakefile(
     }, 
     ABSTRACT_FROM  => 'lib/Finance/Bank/IE/PermanentTSB.pm',
     AUTHOR         => 'Angelo "pallotron" Failla <pallotron@freaknet.org>',
-    EXE_FILES      => [qw(ptsb )],
-    PL_FILES       => { },
+    EXE_FILES      => [qw(ptsb)],
     dist           => { COMPRESS => 'gzip -9f', SUFFIX => 'gz', },
-    clean          => { FILES => qw(t/tmp *.html) },
+    clean          => { FILES => qw(t/tmpl) },
 );

@@ -1,5 +1,13 @@
 Revision history for Perl extension Finance::Bank::IE::PermanentTSB.
 
+0.07
+    - FIXED in PermanentTSB.pm: duplicated values on the array of 
+      statement row. last element of statement page was the same 
+      of the fist one of the next page. fucking permanent tsb web 
+      page! :)
+    - ptsb: printing intial and final balance in statement()
+            (note: put this feature in PermanentTSB.pm?)
+
 0.06 Mon Jan 26 22:09:56 GMT 2009
     - added --regexp feature to the ptsb script
     - added date check to account_statement()

@@ -30,7 +30,7 @@ accounts or third party accounts.
 
 package Finance::Bank::IE::PermanentTSB;
 
-our $VERSION = '0.06';
+our $VERSION = '0.07';
 
 use strict;
 use warnings;
@@ -339,9 +339,10 @@ sub check_balance {
     $config_ref ||= \%cached_cfg;
     my $croak = ($config_ref->{croak} || 1);
  
-    $self->login($config_ref) or return undef;
+    $self->login($config_ref) or return;
 
     $res = $agent->get($BASEURL . '/online/Account.aspx');
+    print $agent->content if($config_ref->{debug});
     my $p = HTML::TokeParser->new(\$agent->response()->content());
     my $i = 0;
     my @array;
@@ -376,7 +377,7 @@ sub check_balance {
 
 }
 
-=head2 C<@account_statement = account_statement($config_ref, $acc_tupe,
+=head2 C<@account_statement = account_statement($config_ref, $acc_type,
 $acc_no, $from, $to, [$type])> - B<public>
 
 =over
@@ -441,7 +442,6 @@ sub account_statement {
     if(defined $from and defined $to) {
 
         # $from should be > of $to
-
         my @d_from = split "/", $from;
         my @d_to   = split "/", $to;
         if (Delta_Days($d_from[0],$d_from[1],$d_from[2],
@@ -564,6 +564,8 @@ sub account_statement {
         # every hash contains [date, description, euro_amount, balance]
         my $hash_ref = {};
         my $visa = 0;
+        my $page = 1;
+        my $i = 1;
         while (1) {
             my $p = HTML::TokeParser->new(\$agent->response()->content());
             while (my $tok = $p->get_tag('table')) {
@@ -592,7 +594,9 @@ sub account_statement {
                                         $hash_ref->{balance} = "-".$1;
                                     }
                                 }
-                                push @ret_array, $hash_ref;
+                                push @ret_array, $hash_ref 
+                                    if(($i==1 and $page == 1) or ($i>1 and $page>=1));
+                                $i++;
                             }
                             if($text =~ /^(\d{2}\/\d{2}\/\d{4}) (\d{2}\/\d{2}\/\d{4}) (.+) ([-\+] [\d\.]+)$/) {
                                 # this is a visa card statement
@@ -600,7 +604,10 @@ sub account_statement {
                                 $hash_ref->{date} = $1;
                                 $hash_ref->{description} = $3;
                                 $hash_ref->{euro_amount} = $4;
+                                $hash_ref->{euro_amount} =~ s/\s//g;
                                 push @ret_array, $hash_ref;
+                                #    if(($i==1 and $page == 1) or ($i>1 and $page>=1));
+                                $i++;
                             }
                         }
                     }
@@ -619,6 +626,8 @@ sub account_statement {
                 } else {
                     $agent->field('__EVENTTARGET', 'lbtnShow');
                 }
+                $page++;
+                $i = 1;
             }
             $res = $agent->submit();
             # something wrong?
@@ -660,6 +669,8 @@ sub logoff {
 
     my $res = $agent->get($BASEURL . '/online/DoLogOff.aspx');
     $agent->save_content("./logoff.html") if $config_ref->{debug};
+    $agent->field('__EVENTTARGET', 'lbtnContinue');
+    $agent->submit;
 }
 
 END {
@@ -727,14 +738,23 @@ L<http://search.cpan.org/~pallotron/Finance-Bank-IE-PermanentTSB/>
     }
 
     my @statement = Finance::Bank::IE::PermanentTSB->account_statement(
-        \%config,'Switch Current A/C - 2667','2008/12/01','2008/12/31');
+        \%config, SWITCH_ACCOUNT, '2667','2008/12/01','2008/12/31');
 
-    Finance::Bank::IE::PermanentTSB->logoff(\%config);
-
+    foreach my $row (@statement) {
+        printf("%s | %s | %s | %s |\n",
+            $row->{date},
+            $row->{description},
+            $row->{euro_amount},
+             $row->{balance}
+        );
+    }
 
 =head1 SEE ALSO
 
 =over
+
+=item * B<ptsb> - CLI tool to interact with your home banking
+L<http://search.cpan.org/~pallotron/Finance-Bank-IE-PermanentTSB/ptsb>
 
 =item * Ronan Waider's C<Finance::Bank::IE::BankOfIreland> -
 L<http://search.cpan.org/~waider/Finance-Bank-IE/>
