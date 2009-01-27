@@ -30,7 +30,7 @@ accounts or third party accounts.
 
 package Finance::Bank::IE::PermanentTSB;
 
-our $VERSION = '0.08';
+our $VERSION = '0.09';
 
 use strict;
 use warnings;
@@ -107,7 +107,7 @@ You don't need to call it directly from you code!>
 
 This function performs the login. It takes just one required argument,
 which is an hash reference for the configuration.
-The function returns true (1) if success or false (0) for any other
+The function returns true (1) if success or undef for any other
 state.
 If debug => 1 then it will dump the html page on the current working
 directory. 
@@ -130,9 +130,10 @@ sub login {
         if (! defined( $config_ref->{$reqfield})) {
             if ($croak) {
                 croak("$reqfield not there!");
+                return undef;
             } else {
                 carp("$reqfield not there!");
-                return;
+                return undef;
             }
         }
     }
@@ -206,8 +207,15 @@ sub login {
 
     # Login - Step 2 of 2
     if(!$agent->content =~ /LOGIN STEP 2 OF 2/is) {
-        #TODO: check che content of the page and deal with it
+        croak("Problem while authenticating!\nPlease don't retry ".
+                "this 3 times in a row or you account will be locked!");
+        return undef;
     } else {
+        if($agent->content !~ /txtDigit/is) {
+            croak("Problem while authenticating!\nPlease don't retry ".
+                "this 3 times in a row or you account will be locked!");
+            return undef;
+        }
         set_pan_fields($agent, $config_ref);
         $res = $agent->submit();
         $agent->save_content("./step2_pan_result.html") 
@@ -285,7 +293,7 @@ sub set_pan_fields {
 =over
 
 This function require the configuration hash reference as argument.
-It returns an array of hashes, one hash for each account. 
+It returns an reference to an array of hashes, one hash for each account. 
 In case of error it return undef;
 Each hash has these keys:
 
@@ -318,7 +326,7 @@ Here is an example:
 The array can be printed using, for example, a foreach loop like this
 one:
 
-    foreach my $acc (@balance) {
+    foreach my $acc (@$balance) {
         printf ("%s ending with %s: %s\n",
             $acc->{'accname'},
             $acc->{'accno'},
@@ -339,7 +347,7 @@ sub check_balance {
     $config_ref ||= \%cached_cfg;
     my $croak = ($config_ref->{croak} || 1);
  
-    $self->login($config_ref) or return;
+    $self->login($config_ref) or return undef;
 
     $res = $agent->get($BASEURL . '/online/Account.aspx');
     print $agent->content if($config_ref->{debug});
@@ -373,7 +381,7 @@ sub check_balance {
         }
     }
 
-    return @array;
+    return \@array;
 
 }
 
@@ -402,11 +410,11 @@ It can be WITHDRAWAL, DEPOSIT or ALL.
 
 =back
 
-The function returns an array of hashes, one hash for each row of the statement.
+The function returns an reference to an array of hashes, one hash for each row of the statement.
 The array of hashes can be printed using, for example, a foreach loop like 
 this one:
 
-    foreach my $row (@statement) {
+    foreach my $row (@$statement) {
         printf("%s | %s | %s | %s \n",
             $row->{date},
             $row->{description},
@@ -478,9 +486,10 @@ sub account_statement {
     }
 
     # verify if the account exists inside the homebanking
-    my @account = $self->check_balance($config_ref);
+    my $acc = $self->check_balance($config_ref);
+    if(not defined $acc) { return undef; }
     my $found = 0;
-    foreach my $c (@account) {
+    foreach my $c (@$acc) {
         if($account  eq $c->{'accname'}." - ".$c->{'accno'}) {
             $found = 1;
             last;   
@@ -489,7 +498,7 @@ sub account_statement {
 
     if($found) {
 
-        $self->login($config_ref) or return;
+        $self->login($config_ref) or return undef;
 
         # go to the Statement page
         $res = $agent->get($BASEURL . '/online/Statement.aspx');
@@ -645,7 +654,7 @@ sub account_statement {
 
     }
 
-    return @ret_array;
+    return \@ret_array;
 
 }
 
@@ -731,8 +740,14 @@ L<http://search.cpan.org/~pallotron/Finance-Bank-IE-PermanentTSB/>
         "debug" => 1, # <- enable debug messages
         );
 
-    my @balance = Finance::Bank::IE::PermanentTSB->check_balance(\%config);
-    foreach my $acc (@balance) {
+    my $balance = Finance::Bank::IE::PermanentTSB->check_balance(\%config);
+
+    if(not defined $balance) {
+        print "Error!\n"
+        exit;
+    }
+
+    foreach my $acc (@$balance) {
         printf ("%s ending with %s: %s\n",
             $acc->{'accname'},
             $acc->{'accno'},
@@ -740,10 +755,15 @@ L<http://search.cpan.org/~pallotron/Finance-Bank-IE-PermanentTSB/>
         );
     }
 
-    my @statement = Finance::Bank::IE::PermanentTSB->account_statement(
+    my $statement = Finance::Bank::IE::PermanentTSB->account_statement(
         \%config, SWITCH_ACCOUNT, '2667','2008/12/01','2008/12/31');
 
-    foreach my $row (@statement) {
+    if(not defined $statement) {
+        print "Error!\n"
+        exit;
+    }
+
+    foreach my $row (@$statement) {
         printf("%s | %s | %s | %s |\n",
             $row->{date},
             $row->{description},

@@ -11,6 +11,9 @@ use Date::Calc qw(check_date);
 use Switch;
 use File::Copy;
 
+use strict;
+use warnings;
+
 sub usage {
   use Pod::Usage;
   pod2usage(-verbose =>1);
@@ -53,7 +56,7 @@ sub parse_configfile {
 
     my $cfgfile = shift;
 
-    $gpg = `which gpg`;
+    my $gpg = `which gpg`;
     chop $gpg;
 
     if($gpg =~ /not found/ or not -x $gpg) {
@@ -89,6 +92,7 @@ sub parse_configfile {
     my @res = `gpg -d $cfgfile`;
     
     # go thru the lines...
+    my($user, $pass, $pan);
     foreach my $line (@res) {
         $line =~ s/\n//g;
         $_ = $line;
@@ -103,7 +107,7 @@ sub parse_configfile {
     }
 
     # die if some of the arguments are undef
-    foreach $i ($user, $pass, $pan) {
+    foreach my $i ($user, $pass, $pan) {
         if(not defined $i) {
             die ("invalid configuration file!");
         }
@@ -121,6 +125,7 @@ sub parse_options {
     # default config file is in ~/.ptsbrc
     $cf->{cfgfile} = $ENV{HOME}."/.ptsbrc";
     $cf->{no_balance} = 0;
+    $cf->{statement_type} = 'all';
 
     # =o -> Extended integer, Perl style. This can be either an optional
     # leading plus or minus sign, followed by a sequence of digits, or
@@ -192,10 +197,12 @@ sub validate_options {
         
     }
 
-    if($cf->{acc_type} =~ /VISA/is) {
-        $cf->{no_balance} = 1;
-        $cf->{statement_type} = ALL;
-    }
+    if(defined $cf->{acc_type}) {
+        if($cf->{acc_type} =~ /VISA/is) {
+            $cf->{no_balance} = 1;
+            $cf->{statement_type} = ALL;
+        }
+    }   
 
     if(defined $cf->{version}) {
         print Finance::Bank::IE::PermanentTSB->VERSION, "\n";
@@ -216,14 +223,19 @@ sub balance {
         "debug" => $cf->{debug},
     );
 
-    my @balance = Finance::Bank::IE::PermanentTSB->check_balance(
+    my $balance = Finance::Bank::IE::PermanentTSB->check_balance(
         \%config, 
         $cf->{acc_type}, 
         $cf->{acc_no}, 
         $cf->{fromdate},
         $cf->{todate});
 
-    print STDERR Dumper(@balance) if($cf->{debug});
+
+    if(not defined $balance) {
+        exit -1;
+    }
+
+    print STDERR Dumper(\$balance) if($cf->{debug});
 
     my $colname = "Account name";
     my $coldigit = "Acc. #";
@@ -242,7 +254,7 @@ sub balance {
     }
     print "\n";
 
-    foreach my $row (@balance) {
+    foreach my $row (@$balance) {
         printf("| %18s | %6s | %11s | %11s |\n",
             $row->{accname},
             $row->{accno},
@@ -273,7 +285,7 @@ sub statement {
         "debug" => $cf->{debug},
     );
 
-    my @statement = Finance::Bank::IE::PermanentTSB->account_statement(
+    my $statement = Finance::Bank::IE::PermanentTSB->account_statement(
         \%config,
         $cf->{acc_type},
         $cf->{acc_no},
@@ -282,7 +294,11 @@ sub statement {
         $cf->{statement_type},
     );
 
-    print STDERR Dumper(@statement) if($cf->{debug});
+    if(not defined $statement) {
+        exit -1;
+    }
+
+    print STDERR Dumper(\$statement) if($cf->{debug});
 
     if ($cf->{no_balance}) {
         for(0...54) { 
@@ -313,12 +329,14 @@ sub statement {
     print "\n";
 
     my $print = 1;
-    foreach my $row (@statement) {
+    foreach my $row (@$statement) {
         my $regex = $cf->{regexp};
-        if($row->{description} =~ /$regex/is) {
-            $print = 1;
-        } else {
-            $print = 0;
+        if(defined $row->{description} and defined $cf->{regexp}) {
+            if($row->{description} =~ /$regex/is) {
+                $print = 1;
+            } else {
+                $print = 0;
+            }
         }
         if($print) {
             printf("| %s | %25s | %11s ",
@@ -362,9 +380,9 @@ sub statement {
         printf("Profit: %f\n", $counter_deposit+$counter_withdrawal);
     }
 
-    $initial_balance = $statement[0]->{balance};
+    $initial_balance = $statement->[0]->{balance};
     $initial_balance =~ s/[\+|-]//;
-    $final_balance = $statement[$#statement]->{balance};
+    $final_balance = $statement->[$#$statement]->{balance};
     $final_balance =~ s/[\+|-]//;
     if(not $cf->{no_balance}) {
         print "\n";
@@ -486,6 +504,12 @@ Lines beginning with # will be interpreted as comment.
 Starting from release 0.08 ptsb will use GnuPG to encrypt the
 configuration file using the private key of the user.
 Therefore you'll have to create your key if you didn't do this yet.
+
+In case you want to decrypt your ptsbrc file use this command:
+
+    $ gpg -d /path/to/your/ptsbrc
+
+This will print the encrypted file on the standard output.
 
 =head1 SEE ALSO
 

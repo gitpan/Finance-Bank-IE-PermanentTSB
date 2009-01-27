@@ -1,7 +1,5 @@
 - convert to OOP rather than functional programming
 
-- ~/.ptsb should be gpg encrypted
-
 - balance_graph(accountname, from, to, fileoutput)
   uses gnuplot to graph
 
