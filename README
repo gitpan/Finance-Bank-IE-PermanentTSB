@@ -21,6 +21,9 @@ DESCRIPTION
     * funds transfer (to be implemented): transfer money between your
       accounts or third party accounts.
 
+    Together with the module you can find a CLI utility to perform
+    operation on your homebanking.
+
 DEPENDENCIES
 
     This module requires these other modules and libraries:
@@ -28,6 +31,7 @@ DEPENDENCIES
         WWW::Mechanize
         HTML::TokeParser
         Date::Calc
+        Test::MockObject
 
 MODULE HOMEPAGES
 

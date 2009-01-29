@@ -9,6 +9,8 @@ WriteMakefile(
         'WWW::Mechanize' => 1.34,
         'HTML::TokeParser' => 2.37,
         'Date::Calc' => 5.4,
+        'Test::More' => 0.62,
+        'Test::MockObject' => 1.07,
     }, 
     ABSTRACT_FROM  => 'lib/Finance/Bank/IE/PermanentTSB.pm',
     AUTHOR         => 'Angelo "pallotron" Failla <pallotron@freaknet.org>',

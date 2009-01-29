@@ -1,12 +1,27 @@
+TODO
+====
+
 - convert to OOP rather than functional programming
 
 - balance_graph(accountname, from, to, fileoutput)
   uses gnuplot to graph
 
-- test units (using Mock Objects)
+- ptsb new option:
 
-- check on login for invalid credentials
-  
-  - wrong username
-  - wrong password
-  - wrong pan
+  -e <expression> | --expression <expression>
+
+  where expression is a mathematical expression like
+
+  '<300'
+  '=300'
+  '>=300'
+
+  the expression will test the euro amount column
+  echo " <    300" | perl -lne '/([<,>,>=,<=,=])\s*(\d*)/; print $1."-".$2'
+
+
+IN PROGRESS
+===========
+
+- test units (using Mock Objects)
+  in progress

@@ -30,7 +30,7 @@ accounts or third party accounts.
 
 package Finance::Bank::IE::PermanentTSB;
 
-our $VERSION = '0.09';
+our $VERSION = '0.1';
 
 use strict;
 use warnings;
@@ -50,6 +50,8 @@ my $agent;
 my $lastop = 0;
 
 my $BASEURL = "https://www.open24.ie/";
+
+my $error = 0;
 
 =head1 CONSTANTS
 
@@ -121,6 +123,7 @@ get clean at boot time).
 sub login {
     my $self = shift;
     my $config_ref = shift;
+    my $content;
 
     $config_ref ||= \%cached_cfg;
 
@@ -129,7 +132,7 @@ sub login {
     for my $reqfield ("open24numba", "password", "pan") {
         if (! defined( $config_ref->{$reqfield})) {
             if ($croak) {
-                croak("$reqfield not there!");
+                carp("$reqfield not there!");
                 return undef;
             } else {
                 carp("$reqfield not there!");
@@ -163,6 +166,7 @@ sub login {
         }
         my $res = $agent->get( $BASEURL . '/online/Account.aspx' );
         if ( $res->is_success ) {
+            $content = $agent->content;
             if($agent->content =~ /ACCOUNT SUMMARY/is) {
                 $lastop = time;
                 carp "Short-circuit: session still valid"
@@ -180,12 +184,22 @@ sub login {
 
     # something wrong?
     if(!$res->is_success) {
-        croak("Unable to get page!");
+        carp("Unable to get page!");
+        return undef;
+    }
+
+    # 2nd agent->content call
+    $content = $agent->content;
+    if($content =~ /Interruption Page/is) {
+        carp "Cannot authenticate on Open24.ie: site mantainance";
+        $error = 1;
+        return undef;
     }
 
     # page not found?
-    if($agent->content =~ /Page Not Found/is) {
-        croak("HTTP ERROR 404: Page Not Found");
+    if($content =~ /Page Not Found/is) {
+        carp("HTTP ERROR 404: Page Not Found");
+        return undef;
     }
 
     # Login - Step 1 of 2
@@ -201,18 +215,21 @@ sub login {
     $res = $agent->submit();
     # something wrong?
     if(!$res->is_success) {
-        croak("Unable to get page!");
+        carp("Unable to get page!");
+        return undef;
     }
     $agent->save_content("./step1_result.html") if $config_ref->{debug};
 
+    # 3rd agent->content call
+    $content = $agent->content;
     # Login - Step 2 of 2
-    if(!$agent->content =~ /LOGIN STEP 2 OF 2/is) {
-        croak("Problem while authenticating!\nPlease don't retry ".
+    if($content !~ /LOGIN STEP 2 OF 2/is) {
+        carp("Problem 1 while authenticating!\nPlease don't retry ".
                 "this 3 times in a row or you account will be locked!");
         return undef;
     } else {
-        if($agent->content !~ /txtDigit/is) {
-            croak("Problem while authenticating!\nPlease don't retry ".
+        if($content !~ /txtDigit/is) {
+            carp("Problem 2 while authenticating!\nPlease don't retry ".
                 "this 3 times in a row or you account will be locked!");
             return undef;
         }
@@ -262,7 +279,8 @@ sub set_pan_fields {
     my $agent = shift;
     my $config_ref = shift;
 
-    my $p = HTML::TokeParser->new(\$agent->response()->content());
+    # 4th agent->content call
+    my $p = HTML::TokeParser->new(\$agent->content());
     # convert the pan string into an array
     my @pan_digits = ();
     my @pan_arr = split('',$config_ref->{pan});
@@ -351,7 +369,7 @@ sub check_balance {
 
     $res = $agent->get($BASEURL . '/online/Account.aspx');
     print $agent->content if($config_ref->{debug});
-    my $p = HTML::TokeParser->new(\$agent->response()->content());
+    my $p = HTML::TokeParser->new(\$agent->content());
     my $i = 0;
     my @array;
     my $hash_ref = {};
@@ -442,7 +460,13 @@ sub account_statement {
             return undef;
         }
     } else {
-        croak("Account type not defined");
+        carp("Account type not defined");
+        return undef;
+    }
+
+    if(not defined $acc_no) {
+        carp("Account number not defined.");
+        return undef;
     }
 
     my $account = $acc_type." - ".$acc_no;
@@ -455,7 +479,8 @@ sub account_statement {
         if (Delta_Days($d_from[0],$d_from[1],$d_from[2],
                        $d_to[0],$d_to[1],$d_to[2]) <= 0) {
 
-            croak("Date range $from -> $to invalid.");
+            carp("Date range $from -> $to invalid.");
+            return undef;
 
         }
 
@@ -463,24 +488,24 @@ sub account_statement {
         foreach my $date ($from, $to) {
             # date should be in format yyyy/mm/dd
             if(not $date  =~ /^\d{4}\/\d{2}\/\d{2}$/) {
-                croak("Date $date should be in format 'yyyy/mm/dd'");
+                carp("Date $date should be in format 'yyyy/mm/dd'");
                 return undef;
             }
             # date should be valid, this is using Date::Calc->check_date()
             my @d = split "/", $date;
             if (not check_date($d[0],$d[1],$d[2])) {
-                croak("Date $date is not valid!");
+                carp("Date $date is not valid!");
                 return undef;
             }
         }
     } else {
-        croak("Date range not defined");
+        carp("Date range not defined");
         return undef;
     }
 
     if(defined $account) {
         if(not $account =~ m/.+ - \d{4}$/) {
-            croak("$account is invalid");
+            carp("$account is invalid");
             return undef;
         }
     }
@@ -510,7 +535,8 @@ sub account_statement {
         $res = $agent->submit();
         # something wrong?
         if(!$res->is_success) {
-            croak("Unable to get page!");
+            carp("Unable to get page!");
+            return undef;
         }
         $agent->save_content("./statement_page2.html") 
             if $config_ref->{debug};
@@ -538,29 +564,32 @@ sub account_statement {
         $res = $agent->submit();
         # something wrong?
         if(!$res->is_success) {
-            croak("Unable to get page!");
+            carp("Unable to get page!");
+            return undef;
         }
-        $agent->save_content("./statement_result.html") 
+        $agent->save_content("./statement_page1.html") 
             if $config_ref->{debug};
 
+        my $content = $agent->content;
         # PermanentTSB doesn't support statements that include data
         # older than 6 months... in this case the interface will reset
         # to the default date range. We just need to print an warning
         # and submit the current form as is
-        if($agent->content =~ /YOU HAVE REQUESTED DATA OLDER THAN 6 MONTHS/is) {
+        if($content =~ /YOU HAVE REQUESTED DATA OLDER THAN 6 MONTHS/is) {
 
             carp("PermanentTSB doesn't support queries older than 6".
                  " months! Resetting to the default date.");
             $agent->field('__EVENTTARGET', 'lbtnShow');
             $res = $agent->submit();
             if(!$res->is_success) {
-                croak("Unable to get page!");
+                carp("Unable to get page!");
+                return undef;
             }
             $agent->save_content("./statement_res_after_6months.html")
                 if $config_ref->{debug};
         }
 
-        if($agent->content =~ /INCORRECT DATE CRITERIA ENTERED: 'TO DATE' WAS IN THE FUTURE./is) {
+        if($content =~ /INCORRECT DATE CRITERIA ENTERED: 'TO DATE' WAS IN THE FUTURE./is) {
 
             carp("Incorrect date criteria entered: 'to date' was in the".
                  " future! Resetting to the default date. ");
@@ -576,7 +605,7 @@ sub account_statement {
         my $page = 1;
         my $i = 1;
         while (1) {
-            my $p = HTML::TokeParser->new(\$agent->response()->content());
+            my $p = HTML::TokeParser->new(\$agent->content());
             while (my $tok = $p->get_tag('table')) {
                 if(defined $tok->[1]{id}) {
                     if($tok->[1]{id} eq 'tblTransactions'){
@@ -639,9 +668,12 @@ sub account_statement {
                 $i = 1;
             }
             $res = $agent->submit();
+            $agent->save_content("./statement_page".($page-1).".html") 
+                if $config_ref->{debug};
             # something wrong?
             if(!$res->is_success) {
-                croak("Unable to get page!");
+                carp("Unable to get page!");
+                return undef;
             }
         }
 
@@ -659,10 +691,6 @@ sub account_statement {
 }
 
 # TODO: implement this
-sub statement_graph {
-}
-
-# TODO: implement this
 sub funds_transfer {
 
 }
@@ -676,7 +704,7 @@ sub logoff {
     my $self = shift;
     my $config_ref = shift;
 
-    if(defined $agent) {
+    if(defined $agent and not $error) {
 
         my $res = $agent->get($BASEURL . '/online/DoLogOff.aspx');
         $agent->save_content("./logoff.html") if $config_ref->{debug};
