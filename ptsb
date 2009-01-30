@@ -140,6 +140,14 @@ where expression is a mathematical expression like
 the expression will test the euro amount column
 only lines matching the expression will be printed
 
+=item B<-g | --graph>
+
+Print graph of the statement using gnuplot. Gnuplot is required!
+
+=item B<-i F<path> | --image F<path>>
+
+Save PNG image in path.
+
 =item B<-v | --version>
 
 Print version

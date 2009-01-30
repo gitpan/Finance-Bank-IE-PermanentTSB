@@ -11,10 +11,11 @@ DESCRIPTION
     Features:
 
     * account(s) balance: retrieves the balance for all the accounts you
-      have set up (current account, visa card, etc.)
+      have set up (current account, visa card, etc.). 
 
     * account(s) statement: retrieves the statement for
-      a particular account, in a range of date.
+      a particular account, in a range of date.Graph supported
+      using GnuPlot.
 
     * mobile phone top-up (to be implemented): top up your mobile phone!
 
@@ -32,6 +33,11 @@ DEPENDENCIES
         HTML::TokeParser
         Date::Calc
         Test::MockObject
+
+    The ptsb CLI interface requires this 3rd party components:
+
+    * GnuPlot (not mandatory, to graph)
+    * GnuPG (mandatory, to secure the ~/.ptsbrc config file)
 
 MODULE HOMEPAGES
 

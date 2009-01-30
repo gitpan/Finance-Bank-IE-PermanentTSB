@@ -16,6 +16,6 @@ set terminal png
 set output "[% OUTPUT %]"
 plot '[% FILENAME %]' using 1:2 title "[% TITLE %]" with linespoints;
 
-#set terminal wxt
-#replot
-#pause -1 "Hit return to continue"
+set terminal wxt
+replot
+pause -1 "Hit return to exit"
