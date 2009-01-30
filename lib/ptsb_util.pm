@@ -2,6 +2,8 @@ package ptsb_util;
 
 =head1 NAME
 
+ptsb_util
+
 This is a package which contains a set of functions used by the CLI utility.
 
 =cut

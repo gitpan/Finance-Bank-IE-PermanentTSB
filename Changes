@@ -1,5 +1,11 @@
 Revision history for Perl extension Finance::Bank::IE::PermanentTSB.
 
+0.2 Fri Jan 30 13:49:07 GMT 2009
+
+    - Implemented graphs using gnuplot
+      Graph can be viewed and saved on the filesystem using
+      the -i and -g options.
+
 0.1 Thu Jan 29 23:11:58 GMT 2009
 
     - exit gracefully when open24.ie site is on mantainance
