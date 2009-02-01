@@ -18,4 +18,8 @@ plot '[% FILENAME %]' using 1:2 title "[% TITLE %]" with linespoints;
 
 set terminal wxt
 replot
+
+set terminal dumb
+replot
+
 pause -1 "Hit return to exit"

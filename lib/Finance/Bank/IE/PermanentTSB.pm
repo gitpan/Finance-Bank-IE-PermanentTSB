@@ -30,7 +30,7 @@ accounts or third party accounts.
 
 package Finance::Bank::IE::PermanentTSB;
 
-our $VERSION = '0.2';
+our $VERSION = '0.3';
 
 use strict;
 use warnings;
@@ -102,8 +102,6 @@ to an hash which contains the configuration:
 
 =head2 C<$boolean = login($config_ref)> - B<private>
 
-=over
-
 B<This is a private function used by other function within the module.
 You don't need to call it directly from you code!>
 
@@ -117,9 +115,8 @@ Please be aware that this has a security risk. The information will
 persist on your filesystem until you reboot your machine (and /var/tmp
 get clean at boot time).
 
-=back
-
 =cut
+
 sub login {
     my $self = shift;
     my $config_ref = shift;
@@ -233,10 +230,12 @@ sub login {
                 "this 3 times in a row or you account will be locked!");
             return undef;
         }
+        print $content if($config_ref->{debug});
         set_pan_fields($agent, $config_ref);
         $res = $agent->submit();
         $agent->save_content("./step2_pan_result.html") 
             if $config_ref->{debug};
+        print $content if($config_ref->{debug});
     }
 
     return 1;
@@ -244,8 +243,6 @@ sub login {
 }
 
 =head2 C<set_pan_fields($config_ref)> - B<private>
-
-=over
 
 B<This is a private function used by other function within the module.
 You don't need to call it directly from you code!>
@@ -269,8 +266,6 @@ If your PAN code is 123234 and the web interface is asking for this:
 The function will fill out the form providing 2,3,4 respectively.
 
 This function doesn't return anything.
-
-=back
 
 =cut
 
@@ -308,8 +303,6 @@ sub set_pan_fields {
 
 =head2 C<@accounts_balance = check_balance($config_ref)> - B<public>
 
-=over
-
 This function require the configuration hash reference as argument.
 It returns an reference to an array of hashes, one hash for each account. 
 In case of error it return undef;
@@ -318,7 +311,7 @@ Each hash has these keys:
 =over
 
 =item * 'accname': account name, i.e. "Switch Current A/C".
-    
+
 =item * 'accno': account number. An integer representing the last 4 digits of the
 account.
 
@@ -352,8 +345,6 @@ one:
         );
     }
 
-=back
-
 =cut
 
 sub check_balance {
@@ -367,8 +358,6 @@ sub check_balance {
  
     $self->login($config_ref) or return undef;
 
-    $res = $agent->get($BASEURL . '/online/Account.aspx');
-    print $agent->content if($config_ref->{debug});
     my $p = HTML::TokeParser->new(\$agent->content());
     my $i = 0;
     my @array;
@@ -406,8 +395,6 @@ sub check_balance {
 =head2 C<@account_statement = account_statement($config_ref, $acc_type,
 $acc_no, $from, $to, [$type])> - B<public>
 
-=over
-
 This function requires 4 mandatory arguments, the 5th is optional.
 
 =over
@@ -441,8 +428,6 @@ this one:
     }
 
 Undef is returned in case of error;
-
-=back
 
 =cut
 
@@ -741,17 +726,13 @@ This module requires these other modules and libraries:
 
 =head1 MODULE HOMEPAGES
 
-=item * Project homepage on Google code (with SVN repository):
-
 =over
+
+=item * Project homepage on Google code (with SVN repository):
 
 L<http://code.google.com/p/finance-bank-ie-permanenttsb>
 
-=back
-
 =item * Project homepage on CPAN.org:
-
-=over
 
 L<http://search.cpan.org/~pallotron/Finance-Bank-IE-PermanentTSB/>
 

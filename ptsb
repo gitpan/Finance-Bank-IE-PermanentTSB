@@ -56,18 +56,17 @@ ptsb [options]
 
 =head2 Print accounts balance:
 
-=over 2
+=over
 
-ptsb [ -F F</path/of/conf/file> ] -b
+=item C<ptsb [ -F F</path/of/conf/file> ] -b>
 
 =back
 
 =head2 Print account statement:
 
-=over 2
+=over
 
-ptsb [ -F F</path/of/conf/file> ] -s -a c -n <4digits>
-       -f yyyy/mm/dd  -t yyyy/mm/dd
+=item C<ptsb [ -F F</path/of/conf/file> ] -s -a c -n <4digits> -f yyyy/mm/dd  -t yyyy/mm/dd>
 
 =back
 
@@ -90,7 +89,7 @@ filename configuration file path (default: F<~/.ptsbrc>).
 Please refer to manual page to see how this file is built.
 
 =item B<-b | --balance>
-                     
+
 print account balance
 
 =item B<-s | --statement>
@@ -185,6 +184,8 @@ This will print the encrypted file on the standard output.
 
 =head1 SEE ALSO
 
+=over
+
 =item * B<Official CPAN page for Finance::Bank::IE::PermanentTSB>
 
 L<http://search.cpan.org/~pallotron/Finance-Bank-IE-PermanentTSB/lib/Finance/Bank/IE/PermanentTSB.pm>
@@ -200,6 +201,8 @@ L<http://www.vitadiunsysadmin.net>
 =item * B<Author homepage on CPAN>
 
 L<http://search.cpan.org/~pallotron/>
+
+=back
 
 =head1 AUTHOR
 
