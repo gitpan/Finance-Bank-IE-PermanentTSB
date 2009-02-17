@@ -48,7 +48,7 @@ __END__
 
 =head1 NAME
 
-ptsb - Interact with you Permanent TSB homebanking!
+ptsb - Interact with you Permanent TSB homebanking from your shell!
 
 =head1 SYNOPSIS
 
@@ -69,6 +69,13 @@ ptsb [options]
 =item C<ptsb [ -F F</path/of/conf/file> ] -s -a c -n <4digits> -f yyyy/mm/dd  -t yyyy/mm/dd>
 
 =back
+
+If your are running Linux you can use the F<date --date> command to simplify the date range definition.
+You can put these aliases on your F<~/.bashrc>:
+
+    alias ptsb_stat='ptsb --statement -a c -n xyzt'
+    alias ptst_last_month="statement_current -f `date +%Y/%m/%d --date='1 month ago'` -t `date +%Y/%m/%d`"
+
 
 =head1 OPTIONS
 
@@ -146,6 +153,15 @@ Print graph of the statement using gnuplot. Gnuplot is required!
 =item B<-i F<path> | --image F<path>>
 
 Save PNG image in path.
+
+=item B<-o F<filename> | --output F<filename>>
+
+Save the output of the statement inside a CSV file named F<filename>.
+CSV format is:
+
+date,description,amount,balance
+
+last field presence depends on the -N flag.
 
 =item B<-v | --version>
 

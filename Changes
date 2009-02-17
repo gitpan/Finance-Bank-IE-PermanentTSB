@@ -1,6 +1,10 @@
 Revision history for Perl extension Finance::Bank::IE::PermanentTSB.
 
-0.2 Fri Jan 30 13:49:07 GMT 2009
+0.4
+
+    - Implement CSV export
+
+0.2 and 0.3 Fri Jan 30 13:49:07 GMT 2009
 
     - Implemented graphs using gnuplot
       Graph can be viewed and saved on the filesystem using

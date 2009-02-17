@@ -30,7 +30,7 @@ accounts or third party accounts.
 
 package Finance::Bank::IE::PermanentTSB;
 
-our $VERSION = '0.3';
+our $VERSION = '0.4';
 
 use strict;
 use warnings;
